@@ -348,7 +348,7 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 						p.P(`return `, p.fmtPkg.Use(), `.Errorf("faield to convert `, fieldName, ` to Timestamp")`)
 						p.Out()
 						p.P(`}`)
-						p.P(`if ts`, fieldName, `.After(`, p.timePkg.Use(), `.Now()) {`)
+						p.P(`if !ts`, fieldName, `.After(`, p.timePkg.Use(), `.Now()) {`)
 						p.In()
 						p.P(`return `, p.fmtPkg.Use(), `.Errorf("must be future timestamp")`)
 						p.Out()
