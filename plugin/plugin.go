@@ -55,12 +55,12 @@ import (
 	"strconv"
 	"strings"
 
+	validator "github.com/arkadyb/go-proto-validators"
 	"github.com/gogo/protobuf/gogoproto"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 	"github.com/gogo/protobuf/vanity"
-	validator "github.com/mwitkow/go-proto-validators"
 )
 
 const uuidPattern = "^([a-fA-F0-9]{8}-" +
@@ -75,6 +75,8 @@ type plugin struct {
 	regexPkg      generator.Single
 	fmtPkg        generator.Single
 	validatorPkg  generator.Single
+	ptypesPkg     generator.Single
+	timePkg       generator.Single
 	useGogoImport bool
 }
 
@@ -97,7 +99,9 @@ func (p *plugin) Generate(file *generator.FileDescriptor) {
 	p.PluginImports = generator.NewPluginImports(p.Generator)
 	p.regexPkg = p.NewImport("regexp")
 	p.fmtPkg = p.NewImport("fmt")
-	p.validatorPkg = p.NewImport("github.com/mwitkow/go-proto-validators")
+	p.timePkg = p.NewImport("time")
+	p.validatorPkg = p.NewImport("github.com/arkadyb/go-proto-validators")
+	p.ptypesPkg = p.NewImport("github.com/golang/protobuf/ptypes")
 
 	for _, msg := range file.Messages() {
 		if msg.DescriptorProto.GetOptions().GetMapEntry() {
@@ -330,34 +334,64 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 		} else if field.IsBytes() {
 			p.generateLengthValidator(variableName, ccTypeName, fieldName, fieldValidator)
 		} else if field.IsMessage() {
-			if p.validatorWithMessageExists(fieldValidator) {
+			if p.validatorWithFutureTimestamp(fieldValidator) {
 				if nullable && !repeated {
-					p.P(`if nil == `, variableName, `{`)
-					p.In()
-					p.P(`return `, p.validatorPkg.Use(), `.FieldError("`, fieldName, `",`, p.fmtPkg.Use(), `.Errorf("message must exist"))`)
-					p.Out()
-					p.P(`}`)
+					if p.fieldIsTimestamp(field) {
+						p.P(`if nil == `, variableName, `{`)
+						p.In()
+						p.P(`return `, p.fmtPkg.Use(), `.Errorf("field `, fieldName, ` cant be nil")`)
+						p.Out()
+						p.P(`}`)
+						p.P(`ts`, fieldName, `, err := `, p.ptypesPkg.Use(), `.Timestamp(`, variableName, `)`)
+						p.P(`if err != nil {`)
+						p.In()
+						p.P(`return `, p.fmtPkg.Use(), `.Errorf("faield to convert `, fieldName, ` to Timestamp")`)
+						p.Out()
+						p.P(`}`)
+						p.P(`if ts`, fieldName, `.After(`, p.timePkg.Use(), `.Now()) {`)
+						p.In()
+						p.P(`return `, p.fmtPkg.Use(), `.Errorf("must be future timestamp")`)
+						p.Out()
+						p.P(`}`)
+					} else {
+						fmt.Fprintf(os.Stderr, "WARNING: field %+v", field.GetTypeName())
+						fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is not of type google.protobuf.Timestamp, validator.future_timestamp has no effect\n", ccTypeName, fieldName)
+					}
 				} else if repeated {
-					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is repeated, validator.msg_exists has no effect\n", ccTypeName, fieldName)
+					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is repeated, validator.future_timestamp has no effect\n", ccTypeName, fieldName)
 				} else if !nullable {
-					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a nullable=false, validator.msg_exists has no effect\n", ccTypeName, fieldName)
+					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a nullable=false, validator.future_timestamp has no effect\n", ccTypeName, fieldName)
 				}
-			}
-			if nullable {
-				p.P(`if `, variableName, ` != nil {`)
-				p.In()
 			} else {
-				// non-nullable fields in proto3 store actual structs, we need pointers to operate on interfaces
-				variableName = "&(" + variableName + ")"
-			}
-			p.P(`if err := `, p.validatorPkg.Use(), `.CallValidatorIfExists(`, variableName, `); err != nil {`)
-			p.In()
-			p.P(`return `, p.validatorPkg.Use(), `.FieldError("`, fieldName, `", err)`)
-			p.Out()
-			p.P(`}`)
-			if nullable {
+				if p.validatorWithMessageExists(fieldValidator) {
+					if nullable && !repeated {
+						p.P(`if nil == `, variableName, `{`)
+						p.In()
+						p.P(`return `, p.validatorPkg.Use(), `.FieldError("`, fieldName, `",`, p.fmtPkg.Use(), `.Errorf("message must exist"))`)
+						p.Out()
+						p.P(`}`)
+					} else if repeated {
+						fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is repeated, validator.msg_exists has no effect\n", ccTypeName, fieldName)
+					} else if !nullable {
+						fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a nullable=false, validator.msg_exists has no effect\n", ccTypeName, fieldName)
+					}
+				}
+				if nullable {
+					p.P(`if `, variableName, ` != nil {`)
+					p.In()
+				} else {
+					// non-nullable fields in proto3 store actual structs, we need pointers to operate on interfaces
+					variableName = "&(" + variableName + ")"
+				}
+				p.P(`if err := `, p.validatorPkg.Use(), `.CallValidatorIfExists(`, variableName, `); err != nil {`)
+				p.In()
+				p.P(`return `, p.validatorPkg.Use(), `.FieldError("`, fieldName, `", err)`)
 				p.Out()
 				p.P(`}`)
+				if nullable {
+					p.Out()
+					p.P(`}`)
+				}
 			}
 		}
 		if repeated && (field.IsMessage() || p.validatorWithNonRepeatedConstraint(fieldValidator)) {
@@ -634,6 +668,18 @@ func (p *plugin) fieldIsProto3Map(file *generator.FileDescriptor, message *gener
 
 func (p *plugin) validatorWithMessageExists(fv *validator.FieldValidator) bool {
 	return fv != nil && fv.MsgExists != nil && *(fv.MsgExists)
+}
+
+func (p *plugin) fieldIsTimestamp(field *descriptor.FieldDescriptorProto) bool {
+	if field.GetType() == descriptor.FieldDescriptorProto_TYPE_MESSAGE && field.GetTypeName() == ".google.protobuf.Timestamp" {
+		return true
+	}
+
+	return false
+}
+
+func (p *plugin) validatorWithFutureTimestamp(fv *validator.FieldValidator) bool {
+	return fv != nil && fv.FutureTimestamp != nil && *(fv.FutureTimestamp)
 }
 
 func (p *plugin) validatorWithNonRepeatedConstraint(fv *validator.FieldValidator) bool {

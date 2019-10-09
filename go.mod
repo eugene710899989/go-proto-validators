@@ -1,4 +1,4 @@
-module github.com/mwitkow/go-proto-validators
+module github.com/arkadyb/go-proto-validators
 
 require (
 	github.com/gogo/protobuf v1.3.0
