@@ -55,7 +55,7 @@ import (
 	"strconv"
 	"strings"
 
-	validator "github.com/arkadyb/go-proto-validators"
+	validator "github.com/eugene710899989/go-proto-validators"
 	"github.com/gogo/protobuf/gogoproto"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
@@ -100,7 +100,7 @@ func (p *plugin) Generate(file *generator.FileDescriptor) {
 	p.regexPkg = p.NewImport("regexp")
 	p.fmtPkg = p.NewImport("fmt")
 	p.timePkg = p.NewImport("time")
-	p.validatorPkg = p.NewImport("github.com/arkadyb/go-proto-validators")
+	p.validatorPkg = p.NewImport("github.com/eugene710899989/go-proto-validators")
 	p.ptypesPkg = p.NewImport("github.com/golang/protobuf/ptypes")
 
 	for _, msg := range file.Messages() {

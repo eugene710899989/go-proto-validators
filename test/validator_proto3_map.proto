@@ -5,13 +5,13 @@ syntax = "proto3";
 package validatortest;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-import "github.com/arkadyb/go-proto-validators/validator.proto";
+import "github.com/eugene710899989/go-proto-validators/validator.proto";
 
 message ValueType {
   string something  = 1 ;
 }
 
-// This needs to be able to compile. Fixes https://github.com/arkadyb/go-proto-validators/issues/1
+// This needs to be able to compile. Fixes https://github.com/eugene710899989/go-proto-validators/issues/1
 message ValidatorMapMessage3 {
 	map<string, string> SomeStringMap = 1;
 

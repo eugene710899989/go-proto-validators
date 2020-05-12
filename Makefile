@@ -15,7 +15,7 @@ prepare_deps:
 
 install:
 	@echo "--- Installing 'govalidators to GOPATH'"
-	go install github.com/arkadyb/go-proto-validators/protoc-gen-govalidators
+	go install github.com/eugene710899989/go-proto-validators/protoc-gen-govalidators
 
 regenerate_test_gogo: prepare_deps install
 	@echo "--- Regenerating test .proto files with gogo imports"

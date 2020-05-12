@@ -1,7 +1,9 @@
-module github.com/arkadyb/go-proto-validators
+module github.com/eugene710899989/go-proto-validators
 
 require (
 	github.com/gogo/protobuf v1.3.0
 	github.com/golang/protobuf v1.3.2
 	github.com/stretchr/testify v1.3.0
 )
+
+go 1.13
