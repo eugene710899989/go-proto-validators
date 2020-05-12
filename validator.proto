@@ -74,6 +74,7 @@ message FieldValidator {
   optional int32 uuid_ver = 18;
   // Ensures the timestamp is in future.
   optional bool future_timestamp = 19;
+  optional bool past_timestamp = 20;
 }
 
 message OneofValidator {

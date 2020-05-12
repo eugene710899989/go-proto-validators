@@ -362,6 +362,34 @@ func (p *plugin) generateProto3Message(file *generator.FileDescriptor, message *
 				} else if !nullable {
 					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a nullable=false, validator.future_timestamp has no effect\n", ccTypeName, fieldName)
 				}
+			}else if p.validatorWithPastTimestamp(fieldValidator) {
+				if nullable && !repeated {
+					if p.isSupportedInt(field) {
+						p.P(`if nil == `, variableName, `{`)
+						p.In()
+						p.P(`return `, p.fmtPkg.Use(), `.Errorf("field `, fieldName, ` cant be nil")`)
+						p.Out()
+						p.P(`}`)
+						//p.P(`ts`, fieldName, `, err := `, p.ptypesPkg.Use(), `.Timestamp(`, variableName, `)`)
+						//p.P(`if err != nil {`)
+						//p.In()
+						//p.P(`return `, p.fmtPkg.Use(), `.Errorf("faield to convert `, fieldName, ` to Timestamp")`)
+						//p.Out()
+						//p.P(`}`)
+						p.P(`if int64(`, fieldName, `) >=`, p.timePkg.Use(), `.time.Now().Unix() {`)
+						p.In()
+						p.P(`return `, p.fmtPkg.Use(), `.Errorf("must be past timestamp")`)
+						p.Out()
+						p.P(`}`)
+					} else {
+						fmt.Fprintf(os.Stderr, "WARNING: field %+v", field.GetTypeName())
+						fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is not of type int, validator.past_timestamp has no effect\n", ccTypeName, fieldName)
+					}
+				} else if repeated {
+					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is repeated, validator.future_timestamp has no effect\n", ccTypeName, fieldName)
+				} else if !nullable {
+					fmt.Fprintf(os.Stderr, "WARNING: field %v.%v is a nullable=false, validator.future_timestamp has no effect\n", ccTypeName, fieldName)
+				}
 			} else {
 				if p.validatorWithMessageExists(fieldValidator) {
 					if nullable && !repeated {
@@ -680,6 +708,10 @@ func (p *plugin) fieldIsTimestamp(field *descriptor.FieldDescriptorProto) bool {
 
 func (p *plugin) validatorWithFutureTimestamp(fv *validator.FieldValidator) bool {
 	return fv != nil && fv.FutureTimestamp != nil && *(fv.FutureTimestamp)
+}
+
+func (p *plugin) validatorWithPastTimestamp(fv *validator.FieldValidator) bool {
+	return fv != nil && fv.PastTimestamp != nil && *(fv.PastTimestamp)
 }
 
 func (p *plugin) validatorWithNonRepeatedConstraint(fv *validator.FieldValidator) bool {
